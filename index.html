@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>6D Snake</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:#000; font-family:'Courier New',monospace; }
+
+#ui {
+  position:fixed; top:0; left:0; right:0;
+  display:flex; justify-content:space-between; align-items:flex-start;
+  padding:20px 28px; pointer-events:none; z-index:10;
+}
+#game-title {
+  font-size:11px; letter-spacing:0.35em; color:#ff6ec7;
+  text-transform:uppercase;
+  text-shadow:0 0 20px #ff6ec7,0 0 40px #ff6ec766;
+  line-height:1.8;
+}
+#score-box { text-align:right; }
+#score {
+  font-size:32px; color:#00ffe7;
+  text-shadow:0 0 20px #00ffe7,0 0 60px #00ffe744;
+  letter-spacing:0.1em;
+}
+#score-label { font-size:9px; letter-spacing:0.4em; color:#00ffe788; text-transform:uppercase; }
+
+#hud-left {
+  position:fixed; left:24px; bottom:24px;
+  display:flex; flex-direction:column; gap:10px;
+  pointer-events:none; z-index:10; align-items:flex-start;
+}
+#compass-wrap { display:flex; flex-direction:column; gap:5px; }
+#compass-label { font-size:9px; letter-spacing:0.4em; color:#ff2d5599; text-transform:uppercase; }
+#compass { border-radius:50%; display:block; }
+
+.axis-indicator { display:flex; flex-direction:column; gap:3px; }
+.axis-label { font-size:8px; letter-spacing:0.35em; text-transform:uppercase; }
+#w-label { color:#7b2fffaa; }
+#v-label { color:#ff9500aa; }
+#u-label { color:#ff2d55aa; }
+.axis-bar-bg { width:100px; height:3px; background:#ffffff0d; border-radius:2px; }
+.axis-bar { height:3px; border-radius:2px; width:50%; transition:width 0.1s ease; }
+#w-bar { background:linear-gradient(90deg,#7b2fff,#ff6ec7); box-shadow:0 0 6px #7b2fff; }
+#v-bar { background:linear-gradient(90deg,#ff9500,#ffcc00); box-shadow:0 0 6px #ff9500; }
+#u-bar { background:linear-gradient(90deg,#ff2d55,#ff6ec7); box-shadow:0 0 6px #ff2d55; }
+
+#dim-label {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  font-size:9px; letter-spacing:0.5em; color:#ffffff33;
+  text-transform:uppercase; pointer-events:none;
+}
+#controls {
+  position:fixed; bottom:24px; right:28px;
+  font-size:9px; letter-spacing:0.2em; color:#ffffff55;
+  text-transform:uppercase; line-height:2.2; pointer-events:none; text-align:right;
+}
+
+/* Mobile */
+#dpad {
+  display:none; position:fixed; right:20px; bottom:20px;
+  width:156px; height:156px; z-index:15; pointer-events:all;
+}
+#dpad button {
+  position:absolute; width:46px; height:46px;
+  background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15);
+  border-radius:8px; color:#fff; font-size:18px; cursor:pointer;
+  user-select:none; touch-action:manipulation;
+  display:flex; align-items:center; justify-content:center;
+  -webkit-tap-highlight-color:transparent; transition:background 0.1s;
+}
+#dpad button:active { background:rgba(255,255,255,0.22); }
+#btn-up    { top:0;    left:55px; }
+#btn-down  { bottom:0; left:55px; }
+#btn-left  { top:55px; left:0;   }
+#btn-right { top:55px; right:0;  }
+#btn-rev   { top:55px; left:55px; font-size:10px; }
+
+.extra-pad {
+  display:none; position:fixed; gap:5px;
+  z-index:15; pointer-events:all; flex-direction:column;
+}
+.extra-pad button {
+  width:52px; height:30px; border-radius:6px;
+  font-family:'Courier New',monospace; font-size:10px; letter-spacing:0.12em;
+  cursor:pointer; touch-action:manipulation; border:none;
+  -webkit-tap-highlight-color:transparent; transition:background 0.1s;
+}
+#wpad { right:20px; bottom:186px; }
+#wpad button { background:rgba(123,47,255,0.2); color:#cc99ff; border:1px solid rgba(123,47,255,0.4); }
+#vpad { right:80px; bottom:186px; }
+#vpad button { background:rgba(255,149,0,0.2); color:#ffcc66; border:1px solid rgba(255,149,0,0.4); }
+#upad { right:140px; bottom:186px; }
+#upad button { background:rgba(255,45,85,0.2); color:#ff88aa; border:1px solid rgba(255,45,85,0.4); }
+
+#dead-overlay {
+  position:fixed; inset:0; background:#00000099;
+  display:none; align-items:center; justify-content:center;
+  flex-direction:column; gap:16px; z-index:20; backdrop-filter:blur(4px);
+}
+#dead-overlay h1 {
+  font-size:48px; letter-spacing:0.2em; color:#ff2d55;
+  text-shadow:0 0 40px #ff2d55; text-transform:uppercase;
+}
+#dead-overlay p { font-size:11px; letter-spacing:0.5em; color:#ffffff66; text-transform:uppercase; }
+#dead-overlay button {
+  margin-top:16px; padding:12px 40px; background:none;
+  border:1px solid #ff2d5566; color:#ff2d55; font-family:inherit;
+  font-size:10px; letter-spacing:0.4em; text-transform:uppercase;
+  cursor:pointer; transition:all 0.2s;
+}
+#dead-overlay button:hover { background:#ff2d5511; border-color:#ff2d55; }
+
+/* Title */
+#title-screen {
+  position:fixed; inset:0; z-index:30;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 40%, #0a0520 0%, #000510 60%, #000 100%);
+}
+#title-screen h1 {
+  font-size:clamp(40px,9vw,82px); letter-spacing:0.18em; color:#00ffe7;
+  text-shadow:0 0 40px #00ffe7,0 0 80px #00ffe744,0 0 120px #00ffe722;
+  text-transform:uppercase; text-align:center; margin-bottom:6px; line-height:1.1;
+}
+.subtitle {
+  font-size:clamp(9px,1.8vw,13px); letter-spacing:0.55em; color:#ffffff33;
+  text-transform:uppercase; margin-bottom:44px; text-align:center;
+}
+.mode-cards { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; padding:0 20px; }
+.mode-card {
+  width:200px; border:1px solid rgba(255,255,255,0.1); border-radius:12px;
+  padding:24px 20px 20px; background:rgba(255,255,255,0.03);
+  display:flex; flex-direction:column; gap:8px;
+  cursor:pointer; transition:all 0.25s; user-select:none;
+}
+.mode-card:hover { background:rgba(255,255,255,0.07); transform:translateY(-2px); }
+.mode-card.normal { border-color:rgba(0,255,231,0.25); }
+.mode-card.normal:hover { border-color:#00ffe7; box-shadow:0 0 24px #00ffe722; }
+.mode-card.mobile { border-color:rgba(255,110,199,0.25); }
+.mode-card.mobile:hover { border-color:#ff6ec7; box-shadow:0 0 24px #ff6ec722; }
+.mode-icon { font-size:24px; }
+.mode-title { font-size:13px; letter-spacing:0.3em; text-transform:uppercase; }
+.mode-card.normal .mode-title { color:#00ffe7; }
+.mode-card.mobile .mode-title { color:#ff6ec7; }
+.mode-desc { font-size:8px; letter-spacing:0.15em; color:#ffffff44; text-transform:uppercase; line-height:2.1; }
+.mode-btn {
+  margin-top:6px; padding:9px 0; text-align:center; border-radius:6px;
+  font-family:'Courier New',monospace; font-size:9px; letter-spacing:0.4em;
+  text-transform:uppercase; border:none; cursor:pointer; transition:all 0.2s;
+}
+.mode-card.normal .mode-btn { background:rgba(0,255,231,0.12); color:#00ffe7; }
+.mode-card.normal:hover .mode-btn { background:rgba(0,255,231,0.22); }
+.mode-card.mobile .mode-btn { background:rgba(255,110,199,0.12); color:#ff6ec7; }
+.mode-card.mobile:hover .mode-btn { background:rgba(255,110,199,0.22); }
+.title-tagline { margin-top:38px; font-size:8px; letter-spacing:0.5em; color:#ffffff18; text-transform:uppercase; text-align:center; }
+.title-credit  { margin-top:10px; font-size:8px; letter-spacing:0.4em; color:#ffffffcc; text-transform:uppercase; text-align:center; }
+</style>
+</head>
+<body>
+
+<!-- TITLE -->
+<div id="title-screen">
+  <h1>6D Snake</h1>
+  <div class="subtitle">navigate the hexeract</div>
+  <div class="mode-cards">
+    <div class="mode-card normal" onclick="beginGame('normal')">
+      <div class="mode-icon">⌨️</div>
+      <div class="mode-title">Normal</div>
+      <div class="mode-desc">
+        ← → &nbsp;&nbsp;turn<br>
+        ↓ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reverse<br>
+        W/S &nbsp;&nbsp;shift w<br>
+        E/Q &nbsp;&nbsp;shift v<br>
+        R/F &nbsp;&nbsp;shift u
+      </div>
+      <button class="mode-btn">Play</button>
+    </div>
+    <div class="mode-card mobile" onclick="beginGame('mobile')">
+      <div class="mode-icon">📱</div>
+      <div class="mode-title">Mobile</div>
+      <div class="mode-desc">
+        D-pad &nbsp;turn<br>
+        ● &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reverse<br>
+        W± &nbsp;&nbsp;&nbsp;shift w<br>
+        V± &nbsp;&nbsp;&nbsp;shift v<br>
+        U± &nbsp;&nbsp;&nbsp;shift u
+      </div>
+      <button class="mode-btn">Play</button>
+    </div>
+  </div>
+  <div class="title-tagline">6-dimensional hexeract &middot; projected to &#8477;&sup3;</div>
+  <div class="title-credit">Made by Liam Stephenson, as a fan project</div>
+</div>
+
+<!-- HUD -->
+<div id="ui">
+  <div id="game-title">&#9672; 6D Snake</div>
+  <div id="score-box">
+    <div id="score-label">score</div>
+    <div id="score">0</div>
+  </div>
+</div>
+
+<div id="hud-left">
+  <div id="compass-wrap">
+    <div id="compass-label">food direction</div>
+    <canvas id="compass" width="80" height="80"></canvas>
+  </div>
+  <div class="axis-indicator">
+    <div class="axis-label" id="w-label">W axis</div>
+    <div class="axis-bar-bg"><div class="axis-bar" id="w-bar"></div></div>
+  </div>
+  <div class="axis-indicator">
+    <div class="axis-label" id="v-label">V axis</div>
+    <div class="axis-bar-bg"><div class="axis-bar" id="v-bar"></div></div>
+  </div>
+  <div class="axis-indicator">
+    <div class="axis-label" id="u-label">U axis</div>
+    <div class="axis-bar-bg"><div class="axis-bar" id="u-bar"></div></div>
+  </div>
+</div>
+
+<div id="controls">← → turn<br>↓ reverse<br>W/S shift w<br>E/Q shift v<br>R/F shift u</div>
+<div id="dim-label">6-dimensional hexeract &middot; projected to &#8477;&sup3;</div>
+
+<!-- MOBILE -->
+<div id="dpad">
+  <button id="btn-up"    onclick="dpadPress('left')">▲</button>
+  <button id="btn-left"  onclick="dpadPress('left')">◀</button>
+  <button id="btn-rev"   onclick="dpadPress('rev')">●</button>
+  <button id="btn-right" onclick="dpadPress('right')">▶</button>
+  <button id="btn-down"  onclick="dpadPress('right')">▼</button>
+</div>
+<div id="wpad" class="extra-pad">
+  <button onclick="dpadPress('wup')">W+</button>
+  <button onclick="dpadPress('wdown')">W−</button>
+</div>
+<div id="vpad" class="extra-pad">
+  <button onclick="dpadPress('vup')">V+</button>
+  <button onclick="dpadPress('vdown')">V−</button>
+</div>
+<div id="upad" class="extra-pad">
+  <button onclick="dpadPress('uup')">U+</button>
+  <button onclick="dpadPress('udown')">U−</button>
+</div>
+
+<!-- DEATH -->
+<div id="dead-overlay">
+  <h1>Collapsed</h1>
+  <p>Self-intersection in 6D space</p>
+  <button onclick="restartGame()">Restart</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script>
+// =============================================================================
+//  CONFIG
+// =============================================================================
+var SIZE  = 16;
+var HALF  = SIZE / 2;
+var SPEED = 200;
+
+// =============================================================================
+//  6D → 3D PROJECTION
+//  Chain of 3 perspective projections: 6D→5D→4D→3D
+//  Each step: rotate in two planes involving the axis being collapsed, then perspective divide
+// =============================================================================
+var rot4 = 0;
+
+function project6to3(x, y, z, w, v, u) {
+  // ── Step 1: rotate in XU and YU planes, perspective project U away (6D→5D)
+  var c1 = Math.cos(rot4 * 0.17), s1 = Math.sin(rot4 * 0.17);
+  var rx1 = x*c1 - u*s1, ru  = x*s1 + u*c1;
+
+  var c2 = Math.cos(rot4 * 0.13), s2 = Math.sin(rot4 * 0.13);
+  var ry1 = y*c2 - ru*s2, ru2 = y*s2 + ru*c2;
+
+  var d6 = 2.3, dn6 = d6 - ru2/HALF;
+  if (dn6 < 0.2) dn6 = 0.2;
+  var s6 = d6/dn6;
+  var px5=rx1*s6, py5=ry1*s6, pz5=z*s6, pw5=w*s6, pv5=v*s6;
+
+  // ── Step 2: rotate in XV and YV planes, perspective project V away (5D→4D)
+  var c3 = Math.cos(rot4 * 0.23), s3 = Math.sin(rot4 * 0.23);
+  var rx2 = px5*c3 - pv5*s3, rv  = px5*s3 + pv5*c3;
+
+  var c4 = Math.cos(rot4 * 0.19), s4 = Math.sin(rot4 * 0.19);
+  var ry2 = py5*c4 - rv*s4, rv2 = py5*s4 + rv*c4;
+
+  var d5 = 2.5, dn5 = d5 - rv2/(HALF*s6);
+  if (dn5 < 0.2) dn5 = 0.2;
+  var s5 = d5/dn5;
+  var px4=rx2*s5, py4=ry2*s5, pz4=pz5*s5, pw4=pw5*s5;
+
+  // ── Step 3: rotate in XW and YW planes, perspective project W away (4D→3D)
+  var c5 = Math.cos(rot4 * 0.31), s5b = Math.sin(rot4 * 0.31);
+  var rx3 = px4*c5 - pw4*s5b, rw = px4*s5b + pw4*c5;
+
+  var c6 = Math.cos(rot4 * 0.27), s6b = Math.sin(rot4 * 0.27);
+  var ry3 = py4*c6 - rw*s6b, rw2b = py4*s6b + rw*c6;
+
+  var d4 = 2.8, dn4 = d4 - rw2b/(HALF*s6*s5);
+  if (dn4 < 0.2) dn4 = 0.2;
+  var s4b = d4/dn4;
+
+  return new THREE.Vector3(rx3*s4b, ry3*s4b, pz4*s4b);
+}
+
+// =============================================================================
+//  SCENE
+// =============================================================================
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000510);
+var camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1000);
+var renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0x223355, 0.9));
+var dl = new THREE.DirectionalLight(0xffffff, 0.6); dl.position.set(10,20,15); scene.add(dl);
+var pl1 = new THREE.PointLight(0x00ffff, 2, 90);   pl1.position.set(-20,20,20);  scene.add(pl1);
+var pl2 = new THREE.PointLight(0xff44ff, 2, 90);   pl2.position.set(20,-20,-20); scene.add(pl2);
+var pl3 = new THREE.PointLight(0xff9500, 1.5, 80); pl3.position.set(20,20,-20);  scene.add(pl3);
+var pl4 = new THREE.PointLight(0xff2d55, 1.5, 80); pl4.position.set(-20,-20,20); scene.add(pl4);
+
+// =============================================================================
+//  HEXERACT WIREFRAME
+//  6D hypercube: 2^6 = 64 vertices, 6*2^5 = 192 edges
+// =============================================================================
+var wireLines = [], wireNodes = [];
+
+function buildHexeract() {
+  var i, j;
+  for (i=0; i<wireLines.length; i++) scene.remove(wireLines[i]);
+  for (i=0; i<wireNodes.length; i++) scene.remove(wireNodes[i]);
+  wireLines=[]; wireNodes=[];
+
+  // 64 vertices
+  var verts = [];
+  var vals = [-HALF, HALF];
+  for (var xi=0;xi<2;xi++)
+  for (var yi=0;yi<2;yi++)
+  for (var zi=0;zi<2;zi++)
+  for (var wi=0;wi<2;wi++)
+  for (var vi=0;vi<2;vi++)
+  for (var ui=0;ui<2;ui++)
+    verts.push({x:vals[xi],y:vals[yi],z:vals[zi],w:vals[wi],v:vals[vi],u:vals[ui]});
+
+  // Edges: differ in exactly 1 coordinate
+  var edges = [];
+  for (i=0; i<verts.length; i++)
+    for (j=i+1; j<verts.length; j++) {
+      var a=verts[i], b=verts[j];
+      var d=(a.x!==b.x?1:0)+(a.y!==b.y?1:0)+(a.z!==b.z?1:0)+
+            (a.w!==b.w?1:0)+(a.v!==b.v?1:0)+(a.u!==b.u?1:0);
+      if (d===1) edges.push([a,b]);
+    }
+
+  // Color edges by which "shell layer" they belong to (sum of positive axes)
+  for (i=0; i<edges.length; i++) {
+    var a=edges[i][0], b=edges[i][1];
+    var shellA = (a.w===HALF?1:0)+(a.v===HALF?1:0)+(a.u===HALF?1:0);
+    var shellB = (b.w===HALF?1:0)+(b.v===HALF?1:0)+(b.u===HALF?1:0);
+    var shell  = Math.min(shellA, shellB);
+    var color, opacity;
+    if      (shell===3) { color=0x00ffff; opacity=0.95; }
+    else if (shell===2) { color=0xffee00; opacity=0.80; }
+    else if (shell===1) { color=0xff9500; opacity=0.60; }
+    else                { color=0xff44ff; opacity=0.90; }
+
+    var pa = project6to3(a.x,a.y,a.z,a.w,a.v,a.u);
+    var pb = project6to3(b.x,b.y,b.z,b.w,b.v,b.u);
+    var pts = [pa.x,pa.y,pa.z,pb.x,pb.y,pb.z];
+
+    var g1 = new THREE.BufferGeometry();
+    g1.setAttribute('position', new THREE.Float32BufferAttribute(pts.slice(),3));
+    var l1 = new THREE.Line(g1, new THREE.LineBasicMaterial({
+      color, transparent:true, opacity, blending:THREE.AdditiveBlending, depthWrite:false
+    }));
+    l1._va=a; l1._vb=b; scene.add(l1); wireLines.push(l1);
+
+    var g2 = new THREE.BufferGeometry();
+    g2.setAttribute('position', new THREE.Float32BufferAttribute(pts.slice(),3));
+    var l2 = new THREE.Line(g2, new THREE.LineBasicMaterial({
+      color, transparent:true, opacity:opacity*0.15, blending:THREE.AdditiveBlending, depthWrite:false
+    }));
+    l2._va=a; l2._vb=b; scene.add(l2); wireLines.push(l2);
+  }
+
+  var nGeo = new THREE.SphereGeometry(0.18,7,7);
+  for (i=0; i<verts.length; i++) {
+    var v6=verts[i];
+    var sh=(v6.w===HALF?1:0)+(v6.v===HALF?1:0)+(v6.u===HALF?1:0);
+    var nc = sh===3?0x00ffff : sh===2?0xffee00 : sh===1?0xff9500 : 0xff44ff;
+    var nd = new THREE.Mesh(nGeo, new THREE.MeshBasicMaterial({
+      color:nc, transparent:true, opacity:0.85,
+      blending:THREE.AdditiveBlending, depthWrite:false
+    }));
+    nd._v6=v6;
+    nd.position.copy(project6to3(v6.x,v6.y,v6.z,v6.w,v6.v,v6.u));
+    scene.add(nd); wireNodes.push(nd);
+  }
+}
+
+function updateHexeract() {
+  for (var i=0; i<wireLines.length; i++) {
+    var l=wireLines[i];
+    var pa=project6to3(l._va.x,l._va.y,l._va.z,l._va.w,l._va.v,l._va.u);
+    var pb=project6to3(l._vb.x,l._vb.y,l._vb.z,l._vb.w,l._vb.v,l._vb.u);
+    l.geometry.setAttribute('position', new THREE.Float32BufferAttribute([pa.x,pa.y,pa.z,pb.x,pb.y,pb.z],3));
+    l.geometry.attributes.position.needsUpdate=true;
+  }
+  for (var i=0; i<wireNodes.length; i++) {
+    var n=wireNodes[i];
+    n.position.copy(project6to3(n._v6.x,n._v6.y,n._v6.z,n._v6.w,n._v6.v,n._v6.u));
+  }
+}
+
+// =============================================================================
+//  SNAKE STATE
+// =============================================================================
+var snake=[],  direction=new THREE.Vector3(1,0,0),
+    normal =new THREE.Vector3(0,0,1), head=new THREE.Vector3(0,0,HALF);
+var wCoord=0, vCoord=0, uCoord=0;
+var food=null, score=0, alive=true, skipTailCheck=false, gameStarted=false;
+var mobileMode=false, dpadQueue=null;
+
+// =============================================================================
+//  FACTORIES
+// =============================================================================
+function makeSnakeMesh(isHead) {
+  return new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9),
+    new THREE.MeshStandardMaterial({
+      color:isHead?0x00ffe7:0x00aa77, emissive:isHead?0x00ddbb:0x002211,
+      emissiveIntensity:isHead?0.55:0.12, roughness:0.35, metalness:0.65
+    }));
+}
+function makeFoodMesh() {
+  return new THREE.Mesh(new THREE.OctahedronGeometry(0.72),
+    new THREE.MeshStandardMaterial({
+      color:0xff2d55, emissive:0xff2d55, emissiveIntensity:0.75,
+      roughness:0.25, metalness:0.5
+    }));
+}
+function randomSurface() {
+  var axis=Math.floor(Math.random()*3), sign=Math.random()>0.5?1:-1;
+  var p=new THREE.Vector3(
+    Math.round((Math.random()*2-1)*(HALF-1)),
+    Math.round((Math.random()*2-1)*(HALF-1)),
+    Math.round((Math.random()*2-1)*(HALF-1))
+  );
+  if(axis===0)p.x=sign*HALF; if(axis===1)p.y=sign*HALF; if(axis===2)p.z=sign*HALF;
+  return p;
+}
+function randHalf() { return Math.round((Math.random()*2-1)*HALF); }
+
+function spawnFood() {
+  if(food) scene.remove(food.mesh);
+  var pos=randomSurface(), w=randHalf(), v=randHalf(), u=randHalf();
+  var m=makeFoodMesh();
+  m.position.copy(project6to3(pos.x,pos.y,pos.z,w,v,u));
+  scene.add(m);
+  food={mesh:m,pos,w,v,u};
+}
+
+// =============================================================================
+//  FACE WRAP
+// =============================================================================
+function wrapToNextFace() {
+  var axes=['x','y','z'];
+  for(var i=0;i<3;i++){
+    var ax=axes[i];
+    if(Math.abs(head[ax])>HALF){
+      var sign=Math.sign(head[ax]); head[ax]=sign*HALF;
+      var nn=new THREE.Vector3(0,0,0); nn[ax]=sign;
+      var ra=new THREE.Vector3().crossVectors(normal,nn);
+      if(ra.length()>0){ ra.normalize(); direction.applyAxisAngle(ra,Math.PI/2);
+        direction.x=Math.round(direction.x); direction.y=Math.round(direction.y); direction.z=Math.round(direction.z); }
+      normal.copy(nn);
+    }
+  }
+}
+
+// =============================================================================
+//  GAME INIT
+// =============================================================================
+function startGame() {
+  for(var i=0;i<snake.length;i++) scene.remove(snake[i].mesh);
+  snake=[];
+  if(food){scene.remove(food.mesh);food=null;}
+  score=0; alive=true; wCoord=0; vCoord=0; uCoord=0; gameStarted=true;
+  head=new THREE.Vector3(0,0,HALF);
+  direction=new THREE.Vector3(1,0,0);
+  normal=new THREE.Vector3(0,0,1);
+  document.getElementById('score').textContent='0';
+  document.getElementById('dead-overlay').style.display='none';
+  var starts=[new THREE.Vector3(0,0,HALF),new THREE.Vector3(-1,0,HALF),new THREE.Vector3(-2,0,HALF)];
+  for(var i=0;i<3;i++){
+    var m=makeSnakeMesh(i===0);
+    m.position.copy(project6to3(starts[i].x,starts[i].y,starts[i].z,0,0,0));
+    scene.add(m); snake.push({mesh:m,pos:starts[i].clone(),w:0,v:0,u:0});
+  }
+  spawnFood(); updateBars();
+}
+
+// =============================================================================
+//  STEP
+// =============================================================================
+function step() {
+  if(!alive) return;
+  head.add(direction); wrapToNextFace();
+  var si=skipTailCheck?2:1; skipTailCheck=false;
+  for(var i=si;i<snake.length;i++){
+    if(snake[i].pos.distanceTo(head)<0.5&&snake[i].w===wCoord&&snake[i].v===vCoord&&snake[i].u===uCoord){
+      die(); return;
+    }
+  }
+  var ate=food&&head.distanceTo(food.pos)<0.5&&wCoord===food.w&&vCoord===food.v&&uCoord===food.u;
+  if(ate){ score++; document.getElementById('score').textContent=score; spawnFood(); }
+  else { var t=snake.pop(); scene.remove(t.mesh); }
+  var nm=makeSnakeMesh(true);
+  nm.position.copy(project6to3(head.x,head.y,head.z,wCoord,vCoord,uCoord));
+  scene.add(nm);
+  if(snake.length>0){ snake[0].mesh.material.color.setHex(0x00aa77); snake[0].mesh.material.emissive.setHex(0x002211); snake[0].mesh.material.emissiveIntensity=0.12; }
+  snake.unshift({mesh:nm,pos:head.clone(),w:wCoord,v:vCoord,u:uCoord});
+}
+
+function die(){ alive=false; document.getElementById('dead-overlay').style.display='flex'; }
+
+function updateBars() {
+  document.getElementById('w-bar').style.width=((wCoord+HALF)/SIZE*100)+'%';
+  document.getElementById('v-bar').style.width=((vCoord+HALF)/SIZE*100)+'%';
+  document.getElementById('u-bar').style.width=((uCoord+HALF)/SIZE*100)+'%';
+}
+
+// =============================================================================
+//  CAMERA
+// =============================================================================
+var camPos=new THREE.Vector3(0,0,30), camTarget=new THREE.Vector3();
+function updateCamera() {
+  var hp=project6to3(head.x,head.y,head.z,wCoord,vCoord,uCoord);
+  var d=normal.clone().multiplyScalar(6).add(direction.clone().multiplyScalar(-8)).add(hp);
+  camPos.lerp(d,0.18); camera.position.copy(camPos);
+  camera.up.copy(normal); camTarget.lerp(hp,0.18); camera.lookAt(camTarget);
+}
+
+// =============================================================================
+//  COMPASS  — 3 rings: W (outer), V (middle), U (inner)
+// =============================================================================
+var cCvs=document.getElementById('compass'), cCtx=cCvs.getContext('2d');
+function drawCompass() {
+  var cx=40,cy=40,r=34; cCtx.clearRect(0,0,80,80);
+  cCtx.beginPath(); cCtx.arc(cx,cy,r,0,Math.PI*2);
+  cCtx.fillStyle='rgba(0,0,0,0.55)'; cCtx.fill();
+  if(!food) return;
+
+  var hp=project6to3(head.x,head.y,head.z,wCoord,vCoord,uCoord);
+  var fp=project6to3(food.pos.x,food.pos.y,food.pos.z,food.w,food.v,food.u);
+  var hv=hp.clone().project(camera), fv=fp.clone().project(camera);
+  var dx=fv.x-hv.x, dy=-(fv.y-hv.y), len=Math.sqrt(dx*dx+dy*dy);
+
+  var wDiff=food.w-wCoord, vDiff=food.v-vCoord, uDiff=food.u-uCoord;
+  var allSame=(wDiff===0&&vDiff===0&&uDiff===0);
+
+  var wCol=wDiff===0?'#00ff66':(wDiff>0?'#00ffff':'#ff44ff');
+  var vCol=vDiff===0?'#00ff66':(vDiff>0?'#ffee00':'#ff6600');
+  var uCol=uDiff===0?'#00ff66':(uDiff>0?'#ff6ec7':'#ff2d55');
+
+  // Three rings
+  [[r,wCol,0.55,2.5],[r-5,vCol,0.45,2],[r-10,uCol,0.35,1.5]].forEach(function(ring){
+    cCtx.beginPath(); cCtx.arc(cx,cy,ring[0],0,Math.PI*2);
+    cCtx.strokeStyle=ring[1]; cCtx.globalAlpha=ring[2]; cCtx.lineWidth=ring[3]; cCtx.stroke();
+  });
+  cCtx.globalAlpha=1;
+
+  if(len<0.01){ cCtx.beginPath(); cCtx.arc(cx,cy,5,0,Math.PI*2); cCtx.fillStyle='#00ff66'; cCtx.fill(); return; }
+
+  var nx=dx/len, ny=dy/len, angle=Math.atan2(ny,nx);
+  var tx=cx+nx*(r-12), ty=cy+ny*(r-12);
+  var ac=allSame?'#00ff66':'#ff2d55';
+
+  cCtx.beginPath(); cCtx.moveTo(cx-nx*7,cy-ny*7); cCtx.lineTo(tx,ty);
+  cCtx.strokeStyle=ac; cCtx.lineWidth=2.5; cCtx.lineCap='round'; cCtx.stroke();
+  var hs=7;
+  cCtx.beginPath();
+  cCtx.moveTo(tx,ty); cCtx.lineTo(tx+Math.cos(angle+2.36)*hs,ty+Math.sin(angle+2.36)*hs);
+  cCtx.moveTo(tx,ty); cCtx.lineTo(tx+Math.cos(angle-2.36)*hs,ty+Math.sin(angle-2.36)*hs);
+  cCtx.strokeStyle=ac; cCtx.lineWidth=2; cCtx.stroke();
+
+  if(!allSame){
+    var labels=[];
+    if(wDiff!==0) labels.push((wDiff>0?'W+':'W-')+Math.abs(wDiff));
+    if(vDiff!==0) labels.push((vDiff>0?'V+':'V-')+Math.abs(vDiff));
+    if(uDiff!==0) labels.push((uDiff>0?'U+':'U-')+Math.abs(uDiff));
+    cCtx.font='7px Courier New'; cCtx.fillStyle='#ffffff77'; cCtx.textAlign='center';
+    cCtx.fillText(labels.slice(0,2).join(' '),cx,cy+3);
+    if(labels.length>2) cCtx.fillText(labels[2],cx,cy+12);
+  }
+}
+
+// =============================================================================
+//  ANIMATE
+// =============================================================================
+var lastTime=0, moveAcc=0, foodSpin=0;
+function animate(ts) {
+  requestAnimationFrame(animate);
+  var dt=Math.min(ts-lastTime,200); lastTime=ts;
+  rot4+=dt*0.0005;
+  updateHexeract();
+  if(gameStarted){
+    for(var i=0;i<snake.length;i++){
+      var s=snake[i];
+      s.mesh.position.copy(project6to3(s.pos.x,s.pos.y,s.pos.z,s.w,s.v,s.u));
+    }
+    if(food){
+      foodSpin+=dt*0.003;
+      food.mesh.rotation.y=foodSpin; food.mesh.rotation.x=foodSpin*0.7;
+      food.mesh.position.copy(project6to3(food.pos.x,food.pos.y,food.pos.z,food.w,food.v,food.u));
+    }
+    if(alive){ processDpad(); moveAcc+=dt; if(moveAcc>=SPEED){moveAcc-=SPEED;step();} }
+    updateCamera();
+  }
+  renderer.render(scene,camera);
+  if(gameStarted) drawCompass();
+}
+
+// =============================================================================
+//  CONTROLS
+// =============================================================================
+function processDpad(){
+  if(!dpadQueue) return;
+  var a=dpadQueue; dpadQueue=null;
+  if(a==='left'){direction.crossVectors(normal,direction);direction.x=Math.round(direction.x);direction.y=Math.round(direction.y);direction.z=Math.round(direction.z);}
+  if(a==='right'){direction.crossVectors(direction,normal);direction.x=Math.round(direction.x);direction.y=Math.round(direction.y);direction.z=Math.round(direction.z);}
+  if(a==='rev'){direction.negate();skipTailCheck=true;}
+  if(a==='wup'){wCoord=Math.min(HALF,wCoord+1);updateBars();}
+  if(a==='wdown'){wCoord=Math.max(-HALF,wCoord-1);updateBars();}
+  if(a==='vup'){vCoord=Math.min(HALF,vCoord+1);updateBars();}
+  if(a==='vdown'){vCoord=Math.max(-HALF,vCoord-1);updateBars();}
+  if(a==='uup'){uCoord=Math.min(HALF,uCoord+1);updateBars();}
+  if(a==='udown'){uCoord=Math.max(-HALF,uCoord-1);updateBars();}
+}
+function dpadPress(a){dpadQueue=a;}
+function dpadRelease(){}
+
+document.addEventListener('keydown',function(e){
+  if(!gameStarted||!alive) return;
+  if(e.key==='ArrowLeft'){direction.crossVectors(normal,direction);direction.x=Math.round(direction.x);direction.y=Math.round(direction.y);direction.z=Math.round(direction.z);}
+  if(e.key==='ArrowRight'){direction.crossVectors(direction,normal);direction.x=Math.round(direction.x);direction.y=Math.round(direction.y);direction.z=Math.round(direction.z);}
+  if(e.key==='ArrowDown'){direction.negate();skipTailCheck=true;}
+  if(e.key==='w'||e.key==='W'){wCoord=Math.min(HALF,wCoord+1);updateBars();}
+  if(e.key==='s'||e.key==='S'){wCoord=Math.max(-HALF,wCoord-1);updateBars();}
+  if(e.key==='e'||e.key==='E'){vCoord=Math.min(HALF,vCoord+1);updateBars();}
+  if(e.key==='q'||e.key==='Q'){vCoord=Math.max(-HALF,vCoord-1);updateBars();}
+  if(e.key==='r'||e.key==='R'){uCoord=Math.min(HALF,uCoord+1);updateBars();}
+  if(e.key==='f'||e.key==='F'){uCoord=Math.max(-HALF,uCoord-1);updateBars();}
+  e.preventDefault();
+});
+
+window.addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// =============================================================================
+//  BOOT
+// =============================================================================
+function beginGame(mode){
+  mobileMode=(mode==='mobile');
+  document.getElementById('title-screen').style.display='none';
+  if(mobileMode){
+    document.getElementById('dpad').style.display='block';
+    document.getElementById('wpad').style.display='flex';
+    document.getElementById('vpad').style.display='flex';
+    document.getElementById('upad').style.display='flex';
+    document.getElementById('controls').style.display='none';
+    document.getElementById('dim-label').style.display='none';
+  }
+  buildHexeract(); startGame();
+}
+
+function restartGame(){
+  document.getElementById('dead-overlay').style.display='none';
+  buildHexeract(); startGame();
+}
+
+buildHexeract();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
